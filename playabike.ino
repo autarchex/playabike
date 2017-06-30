@@ -25,34 +25,36 @@ void setup() {
         pinMode(BRIGHTNESS_SWITCH, INPUT_PULLUP);
 	pinMode(MODE_0_SWITCH, INPUT_PULLUP);
 	pinMode(MODE_1_SWITCH, INPUT_PULLUP);
-	Serial.begin(57600);
-	Serial.println("resetting");
 	LEDS.addLeds<LED_TYPE,DATA_PIN,COLOR_ORDER>(leds,NUM_LEDS);
-	LEDS.setBrightness(BRIGHTNESS_HIGH);
+	LEDS.setBrightness(BRIGHTNESS_HIGH);				//should this start as HIGH?
 }
 
 
 void loop() {
-	//all following code is a single orbit of mode 0 pattern
-	static uint8_t hue = 0;
-        int indices[15];
-        int a;
-	int rovers = 4;					//number of discrete groups of light
-	int roverlength = 3;				//length of the group
-        for(int i = 0; i < NUM_LEDS; i++) {
-		for(int j = 0; j < rovers; j++) {
-	                a = (i + (10 * j));		//rover's base point
-	                leds[a] = CHSV(hue++, 255, 255);
-	                a = (a + 1) % NUM_LEDS;
-	                leds[a] = CHSV(hue++, 255, 255);
-	                a = (a + 1) % NUM_LEDS;
-	                leds[a] = CHSV(hue++, 255, 255);
-		}
-                FastLED.show();
-                for(int j = 0; j < NUM_LEDS; j++){
-                  leds[j] = CRGB::Black;
-                }
-		delay(20);
+	int mode = (DigitalRead(MODE_0_SWITCH) & 1) + (DigitalRead(MODE_1_SWITCH) & 2)	//get mode state from switch states
+	int brightness = DigitalRead(BRIGHTNESS_SWITCH) ? 255 : 20			//get brightness from switch state
+
+	switch(mode) {						//select action based on switch state
+		case 0:
+			//Multiple rovers of changing color chasing each other
+			static uint8_t hue = 0;
+			int indices[15];
+			int a;
+			int rovers = 4;						//number of discrete groups of light
+			int roverlength = 3;					//length of the group
+			for(int i = 0; i < NUM_LEDS; i++) {			//iterate over entire string of leds
+				for(int j = 0; j < rovers; j++) {		//iterate over all rovers
+				a = (i + (10 * j));			//rover's base point
+				for(int k = 0; k < roverlength; k++) {	//iterate over pixels in a rover
+					a = (a + k) % NUM_LEDS;		//handle overflow over end of led string
+					leds[a] = CHSV(hue++, 255, 255);//each pixel written has a different hue
+				}
+			}
+			FastLED.show();					//output the new string state
+			for(int j = 0; j < NUM_LEDS; j++){
+				leds[j] = CRGB::Black;			//blank out the in-memory state of the string
+			}
+			delay(20);					//wait 20 milliseconds
+			break;
 	}
-	
 }
