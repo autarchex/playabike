@@ -21,6 +21,10 @@
 CRGB leds[NUM_LEDS];
 int brightness;
 
+static uint8_t hue = 0;
+static uint8_t sat = 255;
+static uint8_t val = 255;
+
 void setup() { 
         pinMode(BRIGHTNESS_SWITCH, INPUT_PULLUP);
 	pinMode(MODE_0_SWITCH, INPUT_PULLUP);
@@ -36,16 +40,14 @@ void loop() {
         LEDS.setBrightness(brightness);                          //set master brightness level, from switch state
         
         
-        //lighting program 0
+        //PRGM 0 - Sparkles!
 	if(mode == 0) {						//select action based on switch state
 		//Multiple rovers of changing color chasing each other
-		static uint8_t hue = 0;
-		//int indices[15];
 		int rovers = 4;						//number of discrete groups of light
 		int roverlength = 3;					//length of the group
 		for(int led = 0; led < NUM_LEDS; led++) {			//iterate over entire string of leds
-			for(int group = 0; group < rovers; group++) {		//iterate over all rovers
-			    int a = (led + (10 * group));			//rover's base point
+			for(int rover = 0; rover < rovers; rover++) {		//iterate over all rovers
+			    int a = (led + (10 * rover));			//rover's base point
 			    for(int k = 0; k < roverlength; k++) {	//iterate over pixels in a rover
 				a = (a + k) % NUM_LEDS;		//handle overflow over end of led string
 				leds[a] = CHSV(hue++, 255, 255);//each pixel written has a different hue
@@ -58,72 +60,46 @@ void loop() {
 		}
 		delay(25);					//brief visual pause
 	}
-        //lighting program 1
+        //PRGM 1 - COLOR CHASERS (rovers)
         else if(mode == 1) {
-                				//select action based on switch state
-		//Multiple rovers of changing color chasing each other
-		static uint8_t hue = 0;
-		int rovers = 4;						//number of discrete groups of light
-		int roverlength = 3;					//length of the group
-		for(int led = 0; led < NUM_LEDS; led++) {			//iterate over entire string of leds
-			for(int group = 0; group < rovers; group++) {		//iterate over all rovers
-			    int a = (led + (10 * group));			//rover's base point
-			    for(int k = 0; k < roverlength; k++) {	//iterate over pixels in a rover
-				a = (a + k) % NUM_LEDS;		//handle overflow over end of led string
-				leds[a] = CHSV(hue++, 255, 255);//each pixel written has a different hue
-			    }
-		        }
-                }
-       		FastLED.show();					//output the new string state
-		for(int j = 0; j < NUM_LEDS; j++){
-			leds[j] = CRGB::Black;			//blank out the in-memory state of the string
-		}
-		delay(25);					//brief visual paus
-        }
-        //lighting program 2
-        else if(mode == 2) {
-                static uint8_t hue = 0;
-                int a;
-                int brightness = digitalRead(10) ? BRIGHTNESS_HIGH : BRIGHTNESS_LOW;
-                for(int i = 0; i < NUM_LEDS; i++) {
-                    a = (i);
-                    leds[a] = CHSV(hue++, 255, 255);
-                    a = (a + 1) % NUM_LEDS;
-                    leds[a] = CHSV(hue++, 255, 255);
-                    a = (a + 1) % NUM_LEDS;
-                    leds[a] = CHSV(hue++, 255, 255);
-                    
-                    a = (i+10) % NUM_LEDS;
-                    leds[a] = CHSV(hue++, 255, 255);
-                    a = (a + 1) % NUM_LEDS;
-                    leds[a] = CHSV(hue++, 255, 255);
-                    a = (a + 1) % NUM_LEDS;
-                    leds[a] = CHSV(hue++, 255, 255);
-                    
-                    a = (i+20) % NUM_LEDS;
-                    leds[a] = CHSV(hue++, 255, 255);
-                    a = (a + 1) % NUM_LEDS;
-                    leds[a] = CHSV(hue++, 255, 255);
-                    a = (a + 1) % NUM_LEDS;
-                    leds[a] = CHSV(hue++, 255, 255);
-                    
-                    a = (i+30) % NUM_LEDS;
-                    leds[a] = CHSV(hue++, 255, 255);
-                    a = (a + 1) % NUM_LEDS;
-                    leds[a] = CHSV(hue++, 255, 255);
-                    a = (a + 1) % NUM_LEDS;
-                    leds[a] = CHSV(hue++, 255, 255);
-                    
+                for(int led = 0; led < NUM_LEDS; led++) {      //iterate over string of all LEDs, for a complete loop
+                    for(int rover = 0; rover < 4; rover++) {   //iterate over four rovers
+                        int roverstart = led + (12 * rover);   //space the rovers apart by 12 pixels
+                        for(int roverpixel = 0; roverpixel < 3; roverpixel++) {  //iterate over 3 pixels in the rover
+                            leds[(roverstart + roverpixel) % NUM_LEDS] = CHSV(hue++, 255, 255);  //new color each pixel write
+                        }
+                    }
                     FastLED.show();
                     for(int j = 0; j < NUM_LEDS; j++){
                       leds[j] = CRGB::Black;
                     }
     		    delay(20);
                 }
+                delay(100);
         }
-        //lighting program 3
+        //PRGM 2 - Cylon Eye
+        else if(mode == 2) {
+                for(int led = 0; led < NUM_LEDS; led++) {      //iterate over string of all LEDs, for a complete loop
+                    hue++;
+                    for(int rover = 0; rover < 3; rover++) {   //iterate over 3 rovers
+                        int roverstart = led + (20 * rover);
+                        leds[(roverstart + 0) % NUM_LEDS] = CHSV(hue, sat, 40);
+                        leds[(roverstart + 1) % NUM_LEDS] = CHSV(hue, sat, 100);
+                        leds[(roverstart + 2) % NUM_LEDS] = CHSV(hue, sat, 255);
+                        leds[(roverstart + 3) % NUM_LEDS] = CHSV(hue, sat, 100);
+                        leds[(roverstart + 4) % NUM_LEDS] = CHSV(hue, sat, 40);
+                    }
+                    FastLED.show();
+                    for(int j = 0; j < NUM_LEDS; j++){
+                      leds[j] = CRGB::Black;
+                    }
+    		    delay(100);
+                }
+                //delay(100);
+        }
+        //PRGM 3 - LEAVE BLANK FOR PROGRAMMING
         else if(mode == 3) {
-                1;
+                1;  //LEAVE BLANK
         }
         
         
