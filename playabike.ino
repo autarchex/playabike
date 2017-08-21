@@ -7,6 +7,7 @@ UI is a quadrature rotary encoder w/ shaft pushbutton
 */
 
 #include "FastLED.h"
+#include "TimerOne.h"
 
 // How many leds in your strip?
 #define NUM_LEDS 60
@@ -36,18 +37,23 @@ volatile static int mode = 0;                        //global lighting mode
 volatile static int thismode = 0;                    //used to track mode changes
 volatile static uint8_t brightness = BRIGHTNESS_LOW;     //global brightness; default low
 volatile static uint8_t switchdebounce[3];  //used by debounce code
+volatile static uint8_t newstate[3];
 volatile static uint8_t prev_switchstate[3];  //used by debounce code
 
 void setup() {
     for(int i=0; i<3; i++) {
         switchdebounce[i] = 0;
         prev_switchstate[i] = 0;
+        newstate[i] = 0;
     }
+    mode = 0;
     pinMode(PIN_SHAFTBUTTON, INPUT_PULLUP);
 	pinMode(PIN_SA, INPUT_PULLUP);
 	pinMode(PIN_SB, INPUT_PULLUP);
-	LEDS.addLeds<LED_TYPE,DATA_PIN,COLOR_ORDER>(leds,NUM_LEDS);
+	LEDS.addLeds<LED_TYPE,PIN_DATA,COLOR_ORDER>(leds,NUM_LEDS);
 	LEDS.setBrightness(brightness);
+  Timer1.initialize(5000);  //initialize Timer 3 to 5 ms period
+  Timer1.attachInterrupt(debounceSwitches);   //set callback function to debounce switches every 10 ms
 }
 
 void loop() {
@@ -148,31 +154,31 @@ void changeMode(bool increase) {
 
 //called by timer interrupt
 void debounceSwitches() {
-    for(int i = 0; i < 3; i++) switchdebounce[i] << 1;
-    switchdebounce[0] |= !digitalRead(PIN_SA);
-    switchdebounce[1] |= !digitalRead(PIN_SB);
-    switchdebounce[2] |= !digitalRead(PIN_SC);
-    //rotary encoder A
-    if(switchdebounce[0] == 0x00 || switchdebounce[0] == 0xff){ //stable?
-        if(switchdebounce[0] != prev_switchstate[0]){  //new?
-            //TODO:: rotary encoder logic
-            //call changeMode(increase=) with either TRUE or FALSE
-        }
-        prev_switchstate[0] = switchdebounce[0];        //record
+    for(int i = 0; i < 3; i++) switchdebounce[i] <<= 1;  //make room for new value
+    switchdebounce[0] |= (0x01 & !digitalRead(PIN_SA));          //bring in the new switch logic values
+    switchdebounce[1] |= (0x01 & !digitalRead(PIN_SB));          //and invert it to positive logic for sanity's sake
+    switchdebounce[2] |= (0x01 & !digitalRead(PIN_SHAFTBUTTON));
+    for(int i=0; i<3; i++){
+      if(switchdebounce[i] == 0xff || switchdebounce[i] == 0x00){   //is it stable?
+        newstate[i] = switchdebounce[i];                        //then pay attention
+      }
     }
-    //rotary encoder B
-    if(switchdebounce[1] == 0x00 || switchdebounce[1] == 0xff){ //stable?
-        if(switchdebounce[1] != prev_switchstate[1]){           //new?
-            //TODO:: rotary encoder logic
-            //call changeMode(increase=) with either TRUE or FALSE
-        }
-        prev_switchstate[1] = switchdebounce[1];        //record
+    if(newstate[0] != prev_switchstate[0]){       //did switch A change?
+      if((newstate[0] && !newstate[1]) || (!newstate[0] && newstate[1])){  //turned cw
+        changeMode(true);
+      }
     }
-    //shaft switch
-    if(switchdebounce[2] == 0x00 || switchdebounce[2] == 0xff){ //stable?
-        if(switchdebounce[2] && switchdebounce[2] != prev_switchstate[2]){  //newly pressed?
-            changeBrightness();
-        }
-        prev_switchstate[2] = switchdebounce[2];
+    if(newstate[1] != prev_switchstate[1]){       //did switch B change?
+      if((newstate[1] && newstate[0]) || (!newstate[1] && !newstate[0])){  //turned ccw
+        changeMode(false);
+      }
+    }
+    if(newstate[2] != prev_switchstate[2]){     //did shaft button change?
+      if(newstate[2] && !prev_switchstate[2]){  //was it pressed?
+        changeBrightness();
+      }
+    }
+    for(int i=0; i<3; i++){
+      prev_switchstate[i] = newstate[i];          //record for next iteration
     }
 }
