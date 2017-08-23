@@ -20,6 +20,7 @@ UI is a quadrature rotary encoder w/ shaft pushbutton
 #define COLOR_ORDER GRB
 #define NUM_LEDS    60		//60 LEDs in the whole string
 #define BRIGHTNESS_HIGH 255
+#define BRIGHTNESS_MED 100
 #define BRIGHTNESS_LOW 20
 #define BRIGHTNESS_SWITCH 10	//this port has an active-low slide switch, when high, cut the brightness
 #define PIN_SA 7    //rotary encoder switch A, active low
@@ -57,83 +58,106 @@ void setup() {
 }
 
 void loop() {
-    //the while loop executes one full cycle of selected lighting mode,
-    //unless a break occurs due to an asynchronoush mode change.
-    while(true) {
-        //PRGM 0 - Sparkles!
-	if(mode == 0) {						//select action based on switch state
-        thismode = 0;
-		//Multiple rovers of changing color chasing each other
-		int rovers = 4;						//number of discrete groups of light
-		int roverlength = 3;					//length of the group
-		for(int led = 0; led < NUM_LEDS; led++) {			//iterate over entire string of leds
-			for(int rover = 0; rover < rovers; rover++) {		//iterate over all rovers
-			    int a = (led + (10 * rover));			//rover's base point
-			    for(int k = 0; k < roverlength; k++) {	//iterate over pixels in a rover
-				a = (a + k) % NUM_LEDS;		//handle overflow over end of led string
-				leds[a] = CHSV(hue++, 255, 255);//each pixel written has a different hue
-			    }
-		    }
+    //This loop executes a full pass of one of the lighting mode subroutines
+    //each time through.  The selected mode number is passed to the lighting
+    //routine at entry; if the mode changes due to user action while it is
+    //running, the subroutine should detect this and immediately return. This
+    //loop will then execute the newly selected mode routine.
+    switch(mode) {
+        case 0:
+            runLightsSparkles(mode);
+            break;
+        case 1:
+            runLightsColorChasers(mode);
+            break;
+        case 2:
+            runLightsCylonEye(mode);
+            break;
+        case 3:
+            runLightsBlank(mode);
+            break;
+        default:
+            runLightsSparkles(mode);    //functional lights default
+            break;
+    }
+}
+
+
+//Lighting mode that does absolutely nothing but waste time
+//Approx max latency to user mode change is 0 ms.
+void runLightsBlank(uint8_t thismode){
+    return;     //do nothing
+}
+
+//lighting mode that twinkles all the lights rapidly.  Power hog.
+//Approx. max latency to user mode change is 25ms.
+void runLightsSparkles(uint8_t thismode){
+    //Multiple rovers of changing color chasing each other
+    int rovers = 4;						//number of discrete groups of light
+    int roverlength = 3;					//length of the group
+    for(int led = 0; led < NUM_LEDS; led++) {			//iterate over entire string of leds
+        for(int rover = 0; rover < rovers; rover++) {		//iterate over all rovers
+            int a = (led + (10 * rover));			//rover's base point
+            for(int k = 0; k < roverlength; k++) {	//iterate over pixels in a rover
+                a = (a + k) % NUM_LEDS;		//handle overflow over end of led string
+                leds[a] = CHSV(hue++, 255, 255);//each pixel written has a different hue
+            }
         }
-       	FastLED.show();					//output the new string state
-		for(int j = 0; j < NUM_LEDS; j++){
-			leds[j] = CRGB::Black;			//blank out the in-memory state of the string
-		}
-		delay(25);					//brief visual pause
-        if(mode != thismode) break; //catch asynchronous mode change by user
-	}
-        //PRGM 1 - COLOR CHASERS (rovers)
-        else if(mode == 1) {
-            thismode = 1;
-                for(int led = 0; led < NUM_LEDS; led++) {      //iterate over string of all LEDs, for a complete loop
-                    for(int rover = 0; rover < 4; rover++) {   //iterate over four rovers
-                        int roverstart = led + (12 * rover);   //space the rovers apart by 12 pixels
-                        for(int roverpixel = 0; roverpixel < 3; roverpixel++) {  //iterate over 3 pixels in the rover
-                            leds[(roverstart + roverpixel) % NUM_LEDS] = CHSV(hue++, 255, 255);  //new color each pixel write
-                        }
-                    }
-                    FastLED.show();
-                    for(int j = 0; j < NUM_LEDS; j++){
-                      leds[j] = CRGB::Black;
-                    }
-    		    delay(20);
-                if(mode != thismode) break; //catch asynchronous mode change by user
-                }
-                delay(100);
+    }
+    FastLED.show();					//output the new string state
+    for(int j = 0; j < NUM_LEDS; j++){
+        leds[j] = CRGB::Black;			//blank out the in-memory state of the string
+    }
+    delay(25);					//brief visual pause
+    if(mode != thismode) return; //catch asynchronous mode change by user
+}
+
+//Color Chasers.  This light mode has rainbow chasers zipping around.
+//Approx. 120ms max latency to user mode change.
+void runLightsColorChasers(uint8_t thismode){
+    for(int led = 0; led < NUM_LEDS; led++) {      //iterate over string of all LEDs, for a complete loop
+        for(int rover = 0; rover < 4; rover++) {   //iterate over four rovers
+            int roverstart = led + (12 * rover);   //space the rovers apart by 12 pixels
+            for(int roverpixel = 0; roverpixel < 3; roverpixel++) {  //iterate over 3 pixels in the rover
+                leds[(roverstart + roverpixel) % NUM_LEDS] = CHSV(hue++, 255, 255);  //new color each pixel write
+            }
         }
-        //PRGM 2 - Cylon Eye
-        else if(mode == 2) {
-            thismode = 2;
-                for(int led = 0; led < NUM_LEDS; led++) {      //iterate over string of all LEDs, for a complete loop
-                    hue++;
-                    for(int rover = 0; rover < 3; rover++) {   //iterate over 3 rovers
-                        int roverstart = led + (20 * rover);
-                        leds[(roverstart + 0) % NUM_LEDS] = CHSV(hue, sat, 40);
-                        leds[(roverstart + 1) % NUM_LEDS] = CHSV(hue, sat, 100);
-                        leds[(roverstart + 2) % NUM_LEDS] = CHSV(hue, sat, 255);
-                        leds[(roverstart + 3) % NUM_LEDS] = CHSV(hue, sat, 100);
-                        leds[(roverstart + 4) % NUM_LEDS] = CHSV(hue, sat, 40);
-                    }
-                    FastLED.show();
-                    for(int j = 0; j < NUM_LEDS; j++){
-                      leds[j] = CRGB::Black;
-                    }
-    		    delay(100);
-                if(mode != thismode) break; //catch asynchronous mode change by user
-                }
-                //delay(100);
+        FastLED.show();
+        for(int j = 0; j < NUM_LEDS; j++){
+          leds[j] = CRGB::Black;
         }
-        //PRGM 3 - LEAVE BLANK FOR PROGRAMMING
-        else if(mode == 3) {
-            thismode = 3;
-                1;  //LEAVE BLANK
+        delay(20);
+        if(mode != thismode) return; //catch asynchronous mode change by user
+    }
+    delay(100);
+}
+
+//Single chaser makes it around the bike then slowly changes color between cycles.
+//Approx. 100ms max latency to user mode change.
+void runLightsCylonEye(uint8_t thismode){
+    for(int led = 0; led < NUM_LEDS; led++) {      //iterate over string of all LEDs, for a complete loop
+        hue++;
+        for(int rover = 0; rover < 3; rover++) {   //iterate over 3 rovers
+            int roverstart = led + (20 * rover);
+            leds[(roverstart + 0) % NUM_LEDS] = CHSV(hue, sat, 40);
+            leds[(roverstart + 1) % NUM_LEDS] = CHSV(hue, sat, 100);
+            leds[(roverstart + 2) % NUM_LEDS] = CHSV(hue, sat, 255);
+            leds[(roverstart + 3) % NUM_LEDS] = CHSV(hue, sat, 100);
+            leds[(roverstart + 4) % NUM_LEDS] = CHSV(hue, sat, 40);
         }
-    }//outer while loop
-}//end of loop()
+        FastLED.show();
+        for(int j = 0; j < NUM_LEDS; j++){
+          leds[j] = CRGB::Black;
+        }
+    delay(100);
+    if(mode != thismode) return; //catch asynchronous mode change by user
+    }
+}
 
 //Called when a shaft button press detected. Cycles to next brightness state.
 void changeBrightness() {
-    if(brightness == BRIGHTNESS_LOW) brightness = BRIGHTNESS_HIGH;
+    if(brightness == BRIGHTNESS_LOW) brightness = BRIGHTNESS_MED;
+    else if(brightness == BRIGHTNESS_MED) brightness = BRIGHTNESS_HIGH;
     else if(brightness == BRIGHTNESS_HIGH) brightness = BRIGHTNESS_LOW;
     else brightness = BRIGHTNESS_LOW;
     LEDS.setBrightness(brightness);     //immediately update the FastLED code
