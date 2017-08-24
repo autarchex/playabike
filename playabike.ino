@@ -12,82 +12,97 @@ UI is a quadrature rotary encoder w/ shaft pushbutton
 // How many leds in your strip?
 #define NUM_LEDS 60
 
-// For led chips like Neopixels, which have a data line, ground, and power, you just
-// need to define DATA_PIN.  For led chipsets that are SPI based (four wires - data, clock,
-// ground, and power), like the LPD8806, define both DATA_PIN and CLOCK_PIN
-#define PIN_DATA 4  //LED string data is connected to this port
-#define LED_TYPE    WS2811
-#define COLOR_ORDER GRB
-#define NUM_LEDS    60		//60 LEDs in the whole string
+#define PIN_DATA        4          //LED string data is connected to this port
+#define LED_TYPE        WS2811
+#define COLOR_ORDER     GRB
+#define NUM_LEDS        60		//60 LEDs in the whole string
 #define BRIGHTNESS_HIGH 255
-#define BRIGHTNESS_MED 100
-#define BRIGHTNESS_LOW 20
-#define BRIGHTNESS_SWITCH 10	//this port has an active-low slide switch, when high, cut the brightness
-#define PIN_SA 7    //rotary encoder switch A, active low
-#define PIN_SB 6    //rotary encoder switch B, active low
-#define PIN_SHAFTBUTTON 5    //shaft pushbutton, active low
-#define NUM_MODES 4
+#define BRIGHTNESS_MED  100
+#define BRIGHTNESS_LOW  20
+#define PIN_SA          7    //port has rotary encoder switch A, active low
+#define PIN_SB          6    //port has rotary encoder switch B, active low
+#define PIN_SHAFTBUTTON 5    //port has shaft pushbutton, active low
+#define NUM_MODES       4
 
 // Define the array of leds
 CRGB leds[NUM_LEDS];
 
-static uint8_t hue = 0;                         //global HSV color vars
+static uint8_t hue = 0;             //global HSV color vars
 static uint8_t sat = 255;
 static uint8_t val = 255;
 volatile static int mode = 0;                        //global lighting mode
-volatile static int thismode = 0;                    //used to track mode changes
-volatile static uint8_t brightness = BRIGHTNESS_LOW;     //global brightness; default low
-volatile static uint8_t switchdebounce[3];  //used by debounce code
-volatile static uint8_t newstate[3];
-volatile static uint8_t prev_switchstate[3];  //used by debounce code
+volatile static uint8_t brightness = BRIGHTNESS_LOW; //global brightness
+volatile static uint8_t switchdebounce[3];          //used by debounce code
+volatile static bool newstate[3];                //used by debounce code
+volatile static bool prev_switchstate[3];        //used by debounce code
 
 void setup() {
-    for(int i=0; i<3; i++) {
+    for(int i=0; i<3; i++) {                        //initialize debounce vars
         switchdebounce[i] = 0;
         prev_switchstate[i] = 0;
         newstate[i] = 0;
     }
-    mode = 0;
-    pinMode(PIN_SHAFTBUTTON, INPUT_PULLUP);
+    pinMode(PIN_SHAFTBUTTON, INPUT_PULLUP);      //all switch inputs active low
 	pinMode(PIN_SA, INPUT_PULLUP);
 	pinMode(PIN_SB, INPUT_PULLUP);
 	LEDS.addLeds<LED_TYPE,PIN_DATA,COLOR_ORDER>(leds,NUM_LEDS);
 	LEDS.setBrightness(brightness);
-  Timer1.initialize(5000);  //initialize Timer 3 to 5 ms period
-  Timer1.attachInterrupt(debounceSwitches);   //set callback function to debounce switches every 10 ms
+    Timer1.initialize(5000);  //initialize Timer 3 to 5 ms period; operates debounce routine
+    Timer1.attachInterrupt(debounceSwitches);   //set callback function to debounce switches
 }
 
 void loop() {
-    //This loop executes a full pass of one of the lighting mode subroutines
-    //each time through.  The selected mode number is passed to the lighting
-    //routine at entry; if the mode changes due to user action while it is
-    //running, the subroutine should detect this and immediately return. This
-    //loop will then execute the newly selected mode routine.
+    /*This loop executes a full pass of one of the lighting mode subroutines
+    each time through.  For motion modes, full pass is typically a complete
+    circuit of the LED array.  The selected mode number is passed to the
+    routine as an argument; if the mode changes due to user action while it is
+    running, the subroutine should detect this and rapidly return. This
+    loop will then execute the newly selected mode routine.
+    */
     switch(mode) {
         case 0:
-            runLightsSparkles(mode);
+            runLightsColorChasers(mode, true); //run with blanking enabled
             break;
         case 1:
-            runLightsColorChasers(mode);
+            runLightsColorChasers(mode, false); //run with blanking disabled
             break;
         case 2:
-            runLightsCylonEye(mode);
+            runLightsSparkles(mode);
             break;
         case 3:
-            runLightsBlank(mode);
+            runLightsCylonEye(mode);
             break;
         default:
-            runLightsSparkles(mode);    //functional lights default
+            runLightsColorChasers(mode, true);    //default to color chasers with blanking
             break;
     }
 }
 
 
-//Lighting mode that does absolutely nothing but waste time
-//Approx max latency to user mode change is 0 ms.
-void runLightsBlank(uint8_t thismode){
-    return;     //do nothing
+//Color Chasers.  This light mode has rainbow chasers zipping around.
+//Argument 'blanking' determines if it blanks string to black between drawn
+//frames.
+//Approx. 120ms max latency to user mode change.
+void runLightsColorChasers(uint8_t thismode, bool blanking){
+    for(int led = 0; led < NUM_LEDS; led++) {      //iterate over string of all LEDs, for a complete loop
+        for(int rover = 0; rover < 4; rover++) {   //iterate over four rovers
+            int roverstart = led + (12 * rover);   //space the rovers apart by 12 pixels
+            for(int roverpixel = 0; roverpixel < 3; roverpixel++) {  //iterate over 3 pixels in the rover
+                leds[(roverstart + roverpixel) % NUM_LEDS] = CHSV(hue++, 255, 255);  //new color each pixel write
+            }
+        }
+        FastLED.show();
+        if(blanking){               //if caller requested inter-frame blanking
+            for(int j = 0; j < NUM_LEDS; j++){
+                leds[j] = CRGB::Black;      //paint it black baby
+            }
+        }
+        delay(20);
+        if(mode != thismode) return; //catch asynchronous mode change by user
+    }
+    delay(100);
 }
+
 
 //lighting mode that twinkles all the lights rapidly.  Power hog.
 //Approx. max latency to user mode change is 25ms.
@@ -112,25 +127,6 @@ void runLightsSparkles(uint8_t thismode){
     if(mode != thismode) return; //catch asynchronous mode change by user
 }
 
-//Color Chasers.  This light mode has rainbow chasers zipping around.
-//Approx. 120ms max latency to user mode change.
-void runLightsColorChasers(uint8_t thismode){
-    for(int led = 0; led < NUM_LEDS; led++) {      //iterate over string of all LEDs, for a complete loop
-        for(int rover = 0; rover < 4; rover++) {   //iterate over four rovers
-            int roverstart = led + (12 * rover);   //space the rovers apart by 12 pixels
-            for(int roverpixel = 0; roverpixel < 3; roverpixel++) {  //iterate over 3 pixels in the rover
-                leds[(roverstart + roverpixel) % NUM_LEDS] = CHSV(hue++, 255, 255);  //new color each pixel write
-            }
-        }
-        FastLED.show();
-        for(int j = 0; j < NUM_LEDS; j++){
-          leds[j] = CRGB::Black;
-        }
-        delay(20);
-        if(mode != thismode) return; //catch asynchronous mode change by user
-    }
-    delay(100);
-}
 
 //Single chaser makes it around the bike then slowly changes color between cycles.
 //Approx. 100ms max latency to user mode change.
@@ -163,7 +159,8 @@ void changeBrightness() {
     LEDS.setBrightness(brightness);     //immediately update the FastLED code
 }
 
-//Called when shaft rotation occurs. Cycles to next or previous mode.
+//Called when shaft rotation occurs; called by debounce ISR.
+//Cycles to next or previous mode.
 //Argument 'increase' is boolean; TRUE->increase mode number, FALSE->decrease.
 void changeMode(bool increase) {
     if(increase) {
@@ -178,13 +175,16 @@ void changeMode(bool increase) {
 
 //called by timer interrupt
 void debounceSwitches() {
+    //Each of three switches has an entry in switchdebounce[],newstate[],prev_switchstate[]
+    //8 bits of switchedebounce represent a time history; newstate and prev_switchstate are booleans
+    //that represent positive-logic state of the switches.
     for(int i = 0; i < 3; i++) switchdebounce[i] <<= 1;  //make room for new value
     switchdebounce[0] |= (0x01 & !digitalRead(PIN_SA));          //bring in the new switch logic values
     switchdebounce[1] |= (0x01 & !digitalRead(PIN_SB));          //and invert it to positive logic for sanity's sake
     switchdebounce[2] |= (0x01 & !digitalRead(PIN_SHAFTBUTTON));
     for(int i=0; i<3; i++){
       if(switchdebounce[i] == 0xff || switchdebounce[i] == 0x00){   //is it stable?
-        newstate[i] = switchdebounce[i];                        //then pay attention
+        newstate[i] = switchdebounce[i];          //then pay attention, convert to boolean
       }
     }
     if(newstate[0] != prev_switchstate[0]){       //did switch A change?
@@ -192,7 +192,7 @@ void debounceSwitches() {
         changeMode(true);
       }
     }
-    if(newstate[1] != prev_switchstate[1]){       //did switch B change?
+    else if(newstate[1] != prev_switchstate[1]){  //did switch B change? (Mutually exclusive with A)
       if((newstate[1] && newstate[0]) || (!newstate[1] && !newstate[0])){  //turned ccw
         changeMode(false);
       }
